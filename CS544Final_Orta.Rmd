@@ -1,0 +1,310 @@
+---
+title: "Analysis of LEGO Sets in Mexico"
+subtitle: "CS544 Final Project - Professor Suresh Kalathur"
+author: "Melanney Orta"
+date: February 28th, 2024 (Spring 1 2024)
+output:
+  html_document:
+    fig_width: 8
+    code_folding: hide
+    highlight: tango
+    toc: true
+    toc_float:
+      collapsed: true
+    theme: journal
+  pdf_document:
+    toc: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=8, fig.height=4,
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+# Dataset Details
+
+This dataset comes from Kaggle at the following link: https://www.kaggle.com/datasets/carlosalvro/lego-sets-dataset. The dataset contains extensive details on various characteristics of 1223 LEGO sets in Mexico, including pricing, collection, number of pieces, age group, and more. This dataset comes in two versions as well, one that is scraped from the web and another that is cleaned up and includes additional information, which is what will be used in this project.
+
+```{r echo=TRUE}
+library(knitr)
+# Change as needed
+lego_data <- read.csv("C:/Users/Melanney/Documents/RStudio_Files/archive/lego_data_clean.csv")
+kable(head(lego_data), caption="The First Five Rows of the Base Data")
+```
+
+# Objectives
+The main goal is to learn about LEGO sets in Mexico but in addition, the following questions will be addressed:
+
+* What is the most common collection?
+* Is there any trend between the price and the rating of a set?
+* What are the most common age groups sets are made for?
+* What is the distribution of the pricing of LEGO sets?
+* Is there any trend between price and the number of pieces in a set?
+
+# Data Preperation
+While cleaned up significantly, this dataset still needs some preparation to make it suitable for analysis. In this section, a new column was added to show the prices of sets in USD, as the majority of the audience of this analysis will be more familiar with that currency. In addition, all columns in Spanish have been renamed in English for easier use in the code. Lastly, following the first visualization, all visualizations will be done with a modified dataset that does not include keychains. This is the modified dataset that will be used for the majority of the analysis.
+
+```{r echo=TRUE}
+library(tidyverse)
+peso_const <- 17.09
+# Renaming columns
+lego_data <- rename(lego_data, collection=colection, rating=calification, keychain=llavero)
+# Remove keychains
+no_keychains <- subset(lego_data, lego_data$keychain == "False")
+# Add USD
+no_keychains <- no_keychains %>%
+    mutate(usd_price = round(price / peso_const, 2))
+
+kable(head(no_keychains), caption="The First Five Rows of the Modified Data")
+```
+
+# Collection Analysis
+A collection when talking about LEGO is the general theming for a set. When looking at the collections in this dataset, the objective is to identify which collections have the most sets for them. This could give an indication of which sets are most popular among the majority of LEGO's consumers, or simply which collections are more profitable to make. Similarly, looking at the collections with the least sets could show which collections are less popular, less profitable, or simply newer.
+
+## Most Common Collection
+The Majority of LEGO sets belong to a collection (those that do not are in the "Other" collection). This plot and the following plot show the top ten collections with the most sets belonging to them. The most common collection is the LEGO City collection with 108 sets. The next four collections are Other, LEGO Disney, LEGO Friends, and LEGO Star Wars. It is interesting to note here that while two of the top five are original collections created by LEGO (City and Friends), another two are licensed by Disney (Disney and Star Wars). The Other collection consists of a mix of sets but mostly contains LEGO originals that are not part of any collection.
+
+```{r echo=TRUE}
+library(plotly)
+# Get frequencies and convert to df for easier use
+freqs <- as.data.frame(table(lego_data$collection))
+# Change the names for easier use
+names(freqs) <- c("Collection", "Frequency")
+# Order the frequencies so bars are displayed in order
+freqs <- freqs[order(-freqs$Frequency),]
+fig1 <- plot_ly(freqs[1:10,], y=~factor(Collection, levels=freqs$Collection), x= ~Frequency, type="bar", color= ~Collection, colors="Accent", orientation="h") %>%
+    layout(yaxis = list(categoryorder="total ascending", title="Lego Collection"))
+fig1
+```
+
+### Without Keychains
+Something important to note in this dataset is that it includes keychains of LEGO characters. These are not sets in the traditional sense of there being something to build, so they will be removed from the dataset and the visualization will be displayed again. All visualizations from here on out will use this dataset.
+
+```{r echo=TRUE}
+freqs2 <- as.data.frame(table(no_keychains$collection))
+names(freqs2) <- c("Collection", "Frequency")
+freqs2 <- freqs2[order(-freqs2$Frequency),]
+fig2 <- plot_ly(freqs2[1:10,], y=~factor(Collection, levels=freqs2$Collection), x= ~Frequency, type="bar", color= ~Collection, colors="Accent", orientation="h") %>%
+    layout(yaxis = list(categoryorder="total ascending", title="Lego Collection"))
+fig2
+```
+
+By removing these keychains, we can see the top five has changed, with the Other category dropping down to sixth place. The LEGO City collection is still in the lead at 108 sets, as it does not have any keychains. The next four collections are LEGO Friends, LEGO Disney, LEGO Star Wars, and LEGO DUPLO, which are larger than normal LEGOs aimed at small children. The large number of LEGO DUPLO sets could indicate the small children's market in Mexico for LEGO is large.
+
+## Least Common Collections
+By looking at the collections with the fewest number of sets, we can see LEGO Indiana Jones is the collection with the fewest sets, only having 3 total. Interestingly this collection is licensed by Disney, who also owns and licenses several other collections in the top 10. Collections being present in this graph could either indicate their collections being more unpopular when compared to other collections, or simply being newer collections that have not had many sets released yet. For example, LEGO Animal Crossing on this list is a brand new collection, which at the time of writing this, has not yet been released. All of its 5 sets are due to be released on March 1st, 2024.
+```{r echo=TRUE}
+# Use tail to only display the bottom 10
+fig3 <- plot_ly(tail(freqs2,10), y=~factor(Collection, levels=freqs2$Collection), x= ~Frequency, type="bar", color= ~Collection, colors="Accent", orientation="h") %>%
+    layout(yaxis = list(categoryorder="total ascending", title="Lego Collection"))
+fig3
+```
+
+# Pricing Analysis
+By looking at pricing information, it can be seen at what cost most sets are priced at and how many are priced at each price point. From this, it is easier to see what audience LEGO is targeting with each set and their cost. Every LEGO set in this dataset comes with pricing data in Mexican Pesos. As of Feb 14th, the conversion rate is USD 1.00 is equal to MXN 17.09. All conversions done in this analysis will be done with this conversion rate. 
+
+## Frequency of Pricing
+The frequency of pricing tells which price points most sets are at. This visualization is displayed in both Pesos and Dollars.
+
+```{r echo=TRUE}
+fig4 <- plot_ly(x=no_keychains$price, type="histogram", color=I("#DB7093")) %>%
+    layout(yaxis=list(title="Frequency"), xaxis=list(title="Price (in MXN)"))
+fig4
+
+fig5 <- plot_ly(x=no_keychains$usd_price, type="histogram", color=I("#DB7093")) %>%
+    layout(yaxis=list(title="Frequency"), xaxis=list(title="Price (in USD)"))
+fig5
+```
+
+As we can see on both of these graphs, the vast majority of LEGO sets are priced on the lower end of the scale. On the Peso version of this graph, 326 sets belong to the 0-499 Peso bar. This is the most frequent section of prices. On the USD version, 245 sets belong to the $20-39.9 Dollars bar, which is the most frequent section of prices for this version. Another thing of note is the two sets on the right side of the graph, being the two sets that are in the 19.5-19.999k Pesos or $1160-1179.90 dollars. These are both extreme outliers when compared to the rest of the dataset.
+
+## Distribution of Pricing
+The distribution of the pricing information shows how spread out the pricing of sets is. It also gives information about the most and least expensive sets, along with the range of where the majority of sets are priced.
+
+### Overall Distribution
+In the overall distribution of the whole population data, we can see many outliers, and all of them are on the right side of our dataset. This tells us that the pricing data is skewed left (meaning most sets are lower priced!). The median set is priced at 999 Pesos, which is $58.46. The cheapest sets are priced at 99 Pesos, which is $5.79. 50% of sets are priced between 499-2299 Pesos or $29.20-134.52 USD.
+
+```{r echo=TRUE}
+fig6 <- plot_ly(x=no_keychains$price, type="box", color=I("#00FF7F"), name="Price")
+fig6
+```
+
+### By Collection
+When looking at our distributions by collection, we can see some interesting observations. The LEGO Star Wars collection has a very large range or distribution in other words, with its most expensive sets being 19999 Pesos and its cheapest being 249 Pesos ($1179.9 and $14.57 respectively). The LEGO Speed Champions collection has the smallest range, with its most expensive set being 1149 Pesos and its cheapest being 529 Pesos ($67.23 and $30.95 respectively). LEGO Lord of the Rings and LEGO Powered UP interestingly both have very large gaps between their medians and their third quartile values, indicating that the data in the upper half of the distribution is more spread out.
+
+```{r echo=TRUE}
+fig7 <- plot_ly(no_keychains, y=~price, color=~collection, type="box")
+fig7
+```
+
+# Trends
+It is important to note that for this section this is simply an exploration of the relationships between different data points. Correlation does not equal causation and there being a relationship does not mean that one variable is causing a difference or meaningful change in the other.
+
+## Pricing and Ratings
+In this visualization, we can see a clear exponential increase in price as the rating goes up. This holds for the most part but it is important to note there is a slight dip at the far right of the graph where prices go down a bit but the rating still increases. This indicates that while more expensive sets are generally highly rated, the best sets are not the most expensive. The most highly rated sets are likely those that are most fun to build or those that have better value for the set being purchased rather than the most expensive, but this is simply speculation.
+
+```{r echo = TRUE}
+fig8 <- plot_ly(data=no_keychains, x=~rating, y=~price, color=I("#5F9EA0"), 
+                text=~paste("Set: ", toy_name,"<br>MXN Price: $", price, "<br>USD Price: $",
+                            usd_price,"<br>Rating: ", rating, sep=""))
+fig8
+
+```
+
+## Pricing and Pieces
+When looking at the pricing and pieces visualization, we can see a stark linear increase between the number of pieces and the price point of a set. However there is one obvious exception to this, a LEGO Art set called "Mapamundi" in this dataset, or "World Map" as it is known in the United States. Upon further research, this set is a very large but mostly flat map of the world primarily comprised of 1x1 brick pieces, which are the smallest pieces of LEGO available. This causes there to be many pieces in the set but allows for it to be priced fairly inexpensively when compared to other large sets as the pieces in the set are not very complicated. This set is the best when looking at strictly most value for the number of pieces received, at roughly 0.53 Pesos per piece.
+
+```{r echo=TRUE}
+fig9 <- plot_ly(data=no_keychains, x=~pieces, y=~price, color=I("firebrick"),
+                text=~paste("Set: ", toy_name, "<br>MXN Price: $", price, "<br>USD Price: $",
+                            usd_price, "<br>Number of Pieces: ", pieces, sep=""))
+fig9
+```
+
+# Age Groups
+While LEGO is primarily thought of as a kid's toy, it is clear from this visualization that it is not that simple. While it is true that the largest portion of sets (15.2%) are meant for Ages 8 and above, the second largest portion (14.9%) is meant for ages 18 and above. Most age groups are certainly aimed at children, but a significant portion are aimed at older groups such as adults and even a few sets for teenagers. This shows that while LEGO still primarily markets itself as a toy company, there is a significant portion of its market that is of adult age. They know this and create sets for that portion.
+
+```{r echo=TRUE}
+# Get the frequencies of each age category
+pie_data <- as.data.frame(table(no_keychains$age))
+# Rename column to age
+pie_data <- rename(pie_data, age=Var1)
+# Add the word 'Age' to each category
+pie_data <- pie_data %>% mutate(age = paste("Age", age))
+fig10 <- plot_ly(data=pie_data, labels=~age, values=~Freq, type="pie")
+fig10
+```
+
+This pie chart further groups the age groups into a binary 'for adults' or 'not for adults' (for children). This shows a sizable 16.6% of the total sets are marketed for adults, or roughly about 1/6 of all sets.
+```{r echo=TRUE}
+more_pie_data <- as.data.frame(table(no_keychains$adult)) %>% 
+    rename(For_Adults=Var1)
+fig11 <- plot_ly(data=more_pie_data, labels=~For_Adults, values=~Freq, type="pie", marker=list(colors=c("#0d88e6", "#8be04e"))) %>%
+    layout(title="For Adults?")
+fig11
+```
+
+# Central Limit Theorem
+The Central Limit Theorem states that for a given population, the distribution of the sample means taken from a given sample size of the population will have the shape of a normal distribution. This holds even if the population as a whole does not have a normal distribution. This theorem is important because it allows for inferences to be made about a population, without knowing how the whole population is distributed. The Central Limit Theorem is showcased for this dataset with pricing data in Pesos since we know that has a very left-skewed distribution. Ten thousand random samples will be drawn with sample sizes of ten, twenty, thirty, and forty. For reference, the original histogram of the pricing population data is displayed once again before the histograms of the sample means.
+
+```{r echo = TRUE}
+# Print population stats & histogram
+cat("Population Mean =", mean(no_keychains$price), "Population SD =", sd(no_keychains$price),"\n")
+fig3
+# Set seed
+seed <- 1801
+set.seed(seed)
+# Set constants & colors
+samples <- 10000
+samp_size <- seq(10,40,10)
+colors <- c("darkred", "darkgoldenrod", "darkgreen", "darkblue")
+# Initiate variables
+graphs <- list()
+xbar <- numeric(samples)
+# For each sample size, draw 10000 samples and take the mean. Then plot the histogram of the means for
+# each sample size.
+for (i in samp_size) {
+    for (j in 1:samples) {
+        xbar[j] <- mean(sample(no_keychains$price, size=i, replace=FALSE))
+    }
+    hist <- plot_ly(x=xbar, type="histogram", color=I(colors[length(graphs)+1]),
+                    name=paste("Sample Size =", i)) %>%
+        layout(yaxis=list(title="Frequency"), xaxis=list(title="Sample Means"))
+    # Add the graph to the list of graphs
+    graphs[[length(graphs) + 1]] <- hist
+    # Print stats for individual sample size
+    cat("Sample Size =", i, " Mean =", mean(xbar), " SD =", sd(xbar), "\n")
+}
+subplot(
+    graphs[[1]],
+    graphs[[2]],
+    graphs[[3]],
+    graphs[[4]],
+    nrows = 2
+)
+```
+
+As can be seen from the histograms, the distributions are significantly more normalized than the original population distribution. As the sample size increases, each distribution gets closer and closer to the normal distribution. However, all of the distributions are still at least slightly left skewed. In addition, we can see that while the mean of each distribution stays roughly the same, the standard deviation of each distribution goes down, with smaller values indicating a narrower spread of the data.
+
+# Sampling
+A sample is a smaller portion of the population that is selected to conduct analysis. Therefore sampling is collecting samples with assorted techniques to perform some analysis. Sampling is very useful because it allows for conclusions to be drawn whenever it is impractical to collect data on every single member of a population. 
+
+Three different sampling methods have been chosen for this analysis, the first being simple random sampling without replacement. This is a simple technique where each item is selected from a larger group with equal probabilities of being selected for being in the sample. After being selected, items are not returned to the larger group. Systematic sampling was done next, in which specific intervals were created and samples were selected at each interval. This interval was calculated by dividing the total population by the desired sample number. It is important to note that with this technique selection bias may occur if there is any sort of pattern to the data within each interval. Lastly, stratified sampling was conducted. This method divides the population into subgroups, in this case by collection, known as strata. Then, simple random samples are selected from each stratum to get the combined total sample. In this case, since each stratum is a different size, the number of items chosen for the sample in each stratum is calculated proportional to the size of the strata. The sample size was doubled for this method to ensure the sample was large enough for the number of strata present in the dataset.
+
+For this section, the information for the number of pieces will be used and information about the medians will be plotted on each graph for each sampling technique. The whole population will also be displayed before each sampling technique. Additional comparison information will be displayed at the end.
+
+```{r echo=TRUE}
+# Population
+set.seed(seed)
+graphs2 <- list()
+colors2 <- c("#264653", "#2A9D8F", "#E9C46A", "#F4A261")
+med_pop <- median(no_keychains$pieces)
+hist1 <- plot_ly(x=no_keychains$pieces, type="histogram", histnorm="probability", name="Population", color=I(colors2[1])) %>%
+    layout(xaxis=list(title="Total Pieces in Set"), yaxis=list(title="Density")) %>%
+    add_segments(x=med_pop, xend=med_pop, y=0, yend=0.32, name="Population Median", color=I("black"))
+
+# Simple Random Sampling without replacement
+library(sampling)
+sample_size <- 200
+set.seed(seed)
+# Draw sample
+s <- srswr(sample_size, nrow(no_keychains))
+# Get the rows that are included
+rows <- (1:nrow(no_keychains))[s!=0]
+rows <- rep(rows, s[s!=0])
+# Create sample with the rows
+srswor_sample <- no_keychains[rows, ]
+# Take median
+med_srswor <- median(srswor_sample$pieces)
+hist2 <- plot_ly(x=srswor_sample$pieces, type="histogram", histnorm="probability", name="SRSWOR", color=I(colors2[2])) %>%
+    layout(xaxis=list(title="Total Pieces in Set"), yaxis=list(title="Density")) %>%
+    add_segments(x=med_srswor, xend=med_srswor, y=0, yend=0.61, name="SRSWOR Median", color=I("black"))
+
+# Systematic Sampling
+set.seed(seed)
+N <- nrow(no_keychains)
+# Number of groups
+k <- ceiling(N / sample_size)
+# Start taking samples at this row
+r <- sample(k,1)
+# Create te sequence 
+s <- seq(r, by=k, length=sample_size)
+# Index sample from rows
+systematic <- no_keychains[s,]
+# Get rid of NA values
+systematic <- na.omit(systematic)
+# Take median
+med_systematic <- median(systematic$pieces)
+hist3 <- plot_ly(x=systematic$pieces, type="histogram", histnorm="probability", name="Systematic", color=I(colors2[3])) %>%
+    layout(xaxis=list(title="Total Pieces in Set"), yaxis=list(title="Density")) %>%
+    add_segments(x=med_systematic, xend=med_systematic, y=0, yend=0.59, name="Systematic Median", color=I("black"))
+
+# Stratified Sampling by Collection
+set.seed(seed)
+# Make sure the collections are all grouped together
+ordered_lego <- no_keychains[order(no_keychains$collection),]
+# Get frequencies to calculate the sample sizes for each stratum
+freq3 <- table(ordered_lego$collection)
+st_sizes <- (sample_size*2) * freq3 / sum(freq3)
+# Take samples
+st <- strata(no_keychains, stratanames=c("collection"), size=st_sizes, method="srswr")
+st_sample <- getdata(ordered_lego, st)
+# Take median
+med_strat <- median(st_sample$pieces)
+hist4 <- plot_ly(x=st_sample$pieces, type="histogram", histnorm="probability", name="Stratified", color=I(colors2[4])) %>%
+    layout(xaxis=list(title="Total Pieces in Set"), yaxis=list(title="Density")) %>%
+    add_segments(x=med_strat, xend=med_strat, y=0, yend=0.3, name="Stratified Median", color=I("black"))
+subplot(hist1, hist2, hist3, hist4, nrows=4)
+
+# Comparisons
+cat("Population: Sample Size = NA", "Mean =", mean(no_keychains$pieces), "SD =", sd(no_keychains$pieces), "Median =", med_pop, "\n")
+cat("SRSWOR: Sample Size =", sample_size ,"Mean =", mean(srswor_sample$pieces), "SD =", sd(srswor_sample$pieces), "Median =", med_srswor, "\n")
+cat("Systematic: Sample Size =", sample_size ,"Mean =", mean(systematic$pieces), "SD =", sd(systematic$pieces), "Median =", med_systematic, "\n")
+cat("Stratified: Sample Size =", sample_size*2 ,"Mean =", mean(st_sample$pieces), "SD =", sd(st_sample$pieces), "Median =", med_strat, "\n")
+```
+
+From looking at both the graphs and the comparison information, the means, standard deviations, and medians all fall fairly close to the actual population's mean, standard deviation, and median. Interestingly, the stratified sample has some more variation than the other two sampling techniques.
+
+# Conclusion
+Throughout this analysis, we have seen several visualizations that have helped contextualize the data behind many decisions that are made on a day-to-day basis at LEGO. However, this data was only for the Mexican market. Further exploration of data from other regions would be necessary to draw more generalized conclusions and those for other regions as well.
